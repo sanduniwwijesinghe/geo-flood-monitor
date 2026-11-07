@@ -82,7 +82,7 @@ jobs:
       - name: Smoke test
         run: docker run --rm geo-flood-monitor:ci list-aois
       - name: Trivy vulnerability scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0 (pinned by SHA)
         with:
           image-ref: geo-flood-monitor:ci
           severity: CRITICAL,HIGH

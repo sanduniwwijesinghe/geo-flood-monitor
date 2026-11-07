@@ -7,7 +7,9 @@ metadata:
   labels:
     {{- include "gfm.labels" . | nindent 4 }}
 spec:
-  schedule: {{ $p.schedule | quote }}
+  # Argo Workflows >= 3.6 uses a list of schedules
+  schedules:
+    - {{ $p.schedule | quote }}
   timezone: {{ $p.timezone }}
   concurrencyPolicy: Forbid
   startingDeadlineSeconds: 900
