@@ -8,7 +8,11 @@ RUN pip install --no-cache-dir --prefix=/install .
 FROM python:3.12-slim
 LABEL org.opencontainers.image.source="https://github.com/sanduniwwijesinghe/geo-flood-monitor" \
       org.opencontainers.image.description="Sentinel-2 flood-extent pipeline for Sri Lanka"
-# rasterio wheels bundle GDAL, so no system GDAL is needed
+# rasterio wheels bundle GDAL, so no system GDAL is needed - only libexpat,
+# which newer slim base images no longer ship
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libexpat1 \
+ && rm -rf /var/lib/apt/lists/*
 COPY --from=build /install /usr/local
 RUN useradd --uid 10001 --create-home geoflood && mkdir /output && chown geoflood /output
 USER 10001
