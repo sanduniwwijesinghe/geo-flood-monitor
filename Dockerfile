@@ -9,8 +9,10 @@ FROM python:3.12-slim
 LABEL org.opencontainers.image.source="https://github.com/sanduniwwijesinghe/geo-flood-monitor" \
       org.opencontainers.image.description="Sentinel-2 flood-extent pipeline for Sri Lanka"
 # rasterio wheels bundle GDAL, so no system GDAL is needed - only libexpat,
-# which newer slim base images no longer ship
+# which newer slim base images no longer ship. `upgrade` pulls in Debian security
+# fixes released after the base image was built (keeps the Trivy gate green).
 RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
  && apt-get install -y --no-install-recommends libexpat1 \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=build /install /usr/local
