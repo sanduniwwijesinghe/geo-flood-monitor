@@ -1,0 +1,10 @@
+apiVersion: v2
+name: geo-flood-monitor
+description: Sentinel-2 flood monitoring - TiTiler tile service, Argo CronWorkflow pipeline and SLO monitoring
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/sanduniwwijesinghe/geo-flood-monitor
+maintainers:
+  - name: Sanduni Wijesinghe
+    url: https://github.com/sanduniwwijesinghe

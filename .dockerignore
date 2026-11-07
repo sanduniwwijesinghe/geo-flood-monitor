@@ -1,0 +1,10 @@
+.git
+.github
+output
+infra
+deploy
+monitoring
+tests
+**/__pycache__
+**/*.egg-info
+.venv

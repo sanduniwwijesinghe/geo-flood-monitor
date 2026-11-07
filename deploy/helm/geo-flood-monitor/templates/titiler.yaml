@@ -1,0 +1,131 @@
+{{- $t := .Values.titiler }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gfm.titiler.name" . }}
+  labels:
+    {{- include "gfm.labels" . | nindent 4 }}
+    {{- include "gfm.titiler.selector" . | nindent 4 }}
+spec:
+  {{- if not $t.autoscaling.enabled }}
+  replicas: {{ $t.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "gfm.titiler.selector" . | nindent 6 }}
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        {{- include "gfm.titiler.selector" . | nindent 8 }}
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "gfm.titiler.selector" . | nindent 14 }}
+      containers:
+        - name: titiler
+          image: "{{ $t.image.repository }}:{{ $t.image.tag }}"
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: PORT
+              value: "8000"
+            {{- range $k, $v := $t.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            {{- toYaml $t.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gfm.titiler.name" . }}
+  labels:
+    {{- include "gfm.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "gfm.titiler.selector" . | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "gfm.titiler.name" . }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "gfm.titiler.selector" . | nindent 6 }}
+{{- if $t.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "gfm.titiler.name" . }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "gfm.titiler.name" . }}
+  minReplicas: {{ $t.autoscaling.minReplicas }}
+  maxReplicas: {{ $t.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $t.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- if .Values.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "gfm.titiler.name" . }}
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-buffering: "on"
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    - hosts: [{{ .Values.ingress.host | quote }}]
+      secretName: {{ include "gfm.titiler.name" . }}-tls
+  {{- end }}
+  rules:
+    - {{- with .Values.ingress.host }}
+      host: {{ . | quote }}
+      {{- end }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "gfm.titiler.name" . }}
+                port:
+                  name: http
+{{- end }}

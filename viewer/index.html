@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Geo Flood Monitor - viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body, #map { height: 100%; margin: 0; font-family: system-ui, sans-serif; }
+    .panel { position: absolute; top: 10px; right: 10px; z-index: 1000; background: #fff;
+             padding: 10px 12px; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.3); width: 320px; }
+    .panel input { width: 100%; box-sizing: border-box; margin: 4px 0 8px; }
+    .legend span { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: middle; }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<div class="panel">
+  <strong>Geo Flood Monitor</strong>
+  <label>TiTiler URL<input id="titiler" value="http://localhost:8000" /></label>
+  <label>COG URL or path (as TiTiler sees it)<input id="cog" placeholder="/data/kelani-lower_....tif" /></label>
+  <button id="load">Load layer</button>
+  <div class="legend" style="margin-top:8px">
+    <div><span style="background:#e63232"></span>New flood water</div>
+    <div><span style="background:#1e5ac8"></span>Permanent water</div>
+  </div>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const map = L.map("map").setView([6.98, 80.0], 11);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 18, attribution: "&copy; OpenStreetMap contributors"
+  }).addTo(map);
+  let layer;
+  document.getElementById("load").onclick = async () => {
+    const base = document.getElementById("titiler").value.replace(/\/$/, "");
+    const cog = encodeURIComponent(document.getElementById("cog").value);
+    if (layer) map.removeLayer(layer);
+    // The COG embeds a colour table, so TiTiler renders it with its own palette
+    layer = L.tileLayer(`${base}/cog/tiles/WebMercatorQuad/{z}/{x}/{y}.png?url=${cog}`,
+                        { opacity: 0.8, maxZoom: 18 }).addTo(map);
+    try {
+      const info = await (await fetch(`${base}/cog/info.geojson?url=${cog}`)).json();
+      map.fitBounds(L.geoJSON(info).getBounds());
+    } catch (e) { console.warn("could not fetch bounds", e); }
+  };
+</script>
+</body>
+</html>

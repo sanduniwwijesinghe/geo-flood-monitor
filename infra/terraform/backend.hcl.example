@@ -1,0 +1,9 @@
+# Remote state in Azure Storage (create once, outside this stack):
+#   az group create -n rg-tfstate -l centralindia
+#   az storage account create -n <unique> -g rg-tfstate --sku Standard_LRS --allow-blob-public-access false
+#   az storage container create -n tfstate --account-name <unique> --auth-mode login
+resource_group_name  = "rg-tfstate"
+storage_account_name = "<unique>"
+container_name       = "tfstate"
+key                  = "geo-flood-monitor.tfstate"
+use_azuread_auth     = true

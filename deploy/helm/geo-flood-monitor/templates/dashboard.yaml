@@ -1,0 +1,13 @@
+{{- if .Values.monitoring.dashboard.enabled }}
+# Picked up by the kube-prometheus-stack Grafana dashboard sidecar
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gfm.fullname" . }}-dashboard
+  labels:
+    {{- include "gfm.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  geoflood.json: |-
+{{ .Files.Get "dashboards/geoflood.json" | indent 4 }}
+{{- end }}

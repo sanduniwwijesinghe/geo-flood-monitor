@@ -1,0 +1,12 @@
+# Areas of interest (bbox in EPSG:4326: [min_lon, min_lat, max_lon, max_lat]).
+# Kept small enough to fall inside a single Sentinel-2 MGRS tile so the event
+# and baseline scenes share the same pixel grid.
+kelani-lower:
+  name: Lower Kelani Ganga (Kaduwela - Kolonnawa)
+  bbox: [79.88, 6.90, 80.05, 7.00]
+attanagalu-oya:
+  name: Attanagalu Oya basin (Gampaha - Nittambuwa)
+  bbox: [80.00, 7.05, 80.15, 7.15]
+kalu-ganga-ratnapura:
+  name: Kalu Ganga floodplain (Ratnapura)
+  bbox: [80.35, 6.65, 80.45, 6.73]

@@ -1,0 +1,49 @@
+# Local stack: PostGIS + TiTiler + Pushgateway + Prometheus, and the pipeline as a one-off job.
+#   docker compose up -d postgis titiler pushgateway prometheus
+#   docker compose run --rm pipeline run --aoi kelani-lower
+#   open viewer/index.html
+services:
+  postgis:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: geoflood
+      POSTGRES_PASSWORD: geoflood
+      POSTGRES_DB: geoflood
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U geoflood"]
+      interval: 5s
+      retries: 10
+
+  titiler:
+    image: ghcr.io/developmentseed/titiler:latest
+    environment:
+      PORT: "8000"
+      WORKERS_PER_CORE: "1"
+      TITILER_API_CORS_ORIGINS: "*"
+    volumes:
+      - ./output:/data:ro
+    ports: ["8000:8000"]
+
+  pushgateway:
+    image: prom/pushgateway:v1.9.0
+    ports: ["9091:9091"]
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    volumes:
+      - ./monitoring/prometheus-local.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/rules:/etc/prometheus/rules:ro
+    ports: ["9090:9090"]
+
+  pipeline:
+    build: .
+    profiles: ["job"]
+    depends_on:
+      postgis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://geoflood:geoflood@postgis:5432/geoflood
+      PUSHGATEWAY_URL: http://pushgateway:9091
+    volumes:
+      - ./output:/output

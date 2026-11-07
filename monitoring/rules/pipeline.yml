@@ -1,0 +1,36 @@
+# Pipeline freshness SLO, usable with plain Prometheus (local) - the Helm chart
+# ships the same rules plus tile-serving SLOs as a PrometheusRule.
+groups:
+  - name: geoflood-pipeline
+    rules:
+      - record: geoflood:hours_since_success
+        expr: (time() - geoflood_last_success_timestamp_seconds) / 3600
+
+      - alert: GeofloodPipelineStale
+        # Daily schedule + retries: no success for 26h means a missed run
+        expr: geoflood:hours_since_success > 26
+        for: 10m
+        labels:
+          severity: warning
+          slo: freshness
+        annotations:
+          summary: "Flood analysis for {{ $labels.aoi }} is stale"
+          description: "No successful run for {{ $value | humanize }}h (SLO: fresh within 26h)."
+
+      - alert: GeofloodPipelineFailing
+        expr: geoflood_last_failure_timestamp_seconds > geoflood_last_success_timestamp_seconds
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Latest flood pipeline run for {{ $labels.aoi }} failed"
+          runbook_url: "https://github.com/sanduniwwijesinghe/geo-flood-monitor/blob/main/docs/runbook.md#pipeline-failing"
+
+      - alert: GeofloodLowCoverage
+        # Monsoon cloud cover: result exists but most of the AOI was unusable
+        expr: geoflood_valid_pixel_ratio < 0.3
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "Only {{ $value | humanizePercentage }} of {{ $labels.aoi }} was cloud-free"

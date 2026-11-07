@@ -1,0 +1,3 @@
+subscription_id = "00000000-0000-0000-0000-000000000000"
+location        = "centralindia"
+batch_vm_size   = "Standard_D4as_v5"

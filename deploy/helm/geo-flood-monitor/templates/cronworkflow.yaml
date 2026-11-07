@@ -1,0 +1,95 @@
+{{- if .Values.pipeline.enabled }}
+{{- $p := .Values.pipeline }}
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: {{ include "gfm.fullname" . }}-pipeline
+  labels:
+    {{- include "gfm.labels" . | nindent 4 }}
+spec:
+  schedule: {{ $p.schedule | quote }}
+  timezone: {{ $p.timezone }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 900
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  workflowSpec:
+    entrypoint: all-aois
+    serviceAccountName: {{ .Values.serviceAccount.name }}
+    activeDeadlineSeconds: 3600
+    podGC:
+      strategy: OnPodSuccess
+    podMetadata:
+      labels:
+        azure.workload.identity/use: "true"
+        app.kubernetes.io/name: geoflood-pipeline
+    templates:
+      # Fan out: one pod per AOI, processed in parallel on the spot pool
+      - name: all-aois
+        steps:
+          - - name: analyse
+              template: analyse-aoi
+              arguments:
+                parameters:
+                  - name: aoi
+                    value: {{ `"{{item}}"` }}
+              withItems:
+                {{- toYaml $p.aois | nindent 16 }}
+
+      - name: analyse-aoi
+        inputs:
+          parameters:
+            - name: aoi
+        retryStrategy:
+          limit: {{ $p.retries | quote }}
+          retryPolicy: Always   # also retry on spot eviction (pod deleted)
+          backoff:
+            duration: "2m"
+            factor: "2"
+        nodeSelector:
+          {{- toYaml $p.nodeSelector | nindent 10 }}
+        tolerations:
+          {{- toYaml $p.tolerations | nindent 10 }}
+        container:
+          image: "{{ $p.image.repository }}:{{ $p.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ $p.image.pullPolicy }}
+          args:
+            - run
+            - --aoi
+            - {{ `"{{inputs.parameters.aoi}}"` }}
+            - --lookback-days
+            - {{ $p.lookbackDays | quote }}
+            - --max-cloud
+            - {{ $p.maxCloud | quote }}
+          env:
+            - name: AZURE_STORAGE_ACCOUNT_URL
+              value: {{ $p.storageAccountUrl | quote }}
+            - name: AZURE_STORAGE_CONTAINER
+              value: {{ $p.storageContainer | quote }}
+            - name: PUSHGATEWAY_URL
+              value: {{ $p.pushgatewayUrl | quote }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $p.databaseSecret.name }}
+                  key: {{ $p.databaseSecret.key }}
+          resources:
+            {{- toYaml $p.resources | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: output
+              mountPath: /output
+            - name: tmp
+              mountPath: /tmp
+        volumes:
+          - name: output
+            emptyDir: {}
+          - name: tmp
+            emptyDir: {}
+{{- end }}

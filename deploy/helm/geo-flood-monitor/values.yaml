@@ -1,0 +1,84 @@
+# --- Workload Identity for the pipeline (client id from `terraform output pipeline_identity_client_id`)
+serviceAccount:
+  name: geoflood-pipeline
+  azureClientId: ""
+
+# --- Batch pipeline (Argo Workflows CronWorkflow)
+pipeline:
+  enabled: true
+  image:
+    repository: ghcr.io/sanduniwwijesinghe/geo-flood-monitor
+    tag: ""            # defaults to .Chart.AppVersion
+    pullPolicy: IfNotPresent
+  schedule: "30 9 * * *"   # after the ~10:30 local Sentinel-2 overpass is usually processed
+  timezone: Asia/Colombo
+  aois:
+    - kelani-lower
+    - attanagalu-oya
+    - kalu-ganga-ratnapura
+  lookbackDays: 10
+  maxCloud: 40
+  retries: 2
+  storageAccountUrl: ""       # terraform output storage_account_url
+  storageContainer: flood-cogs
+  databaseSecret:
+    name: geoflood-db          # kubectl create secret generic geoflood-db --from-literal=DATABASE_URL=...
+    key: DATABASE_URL
+  pushgatewayUrl: http://prometheus-pushgateway.monitoring.svc:9091
+  resources:
+    requests: { cpu: "1", memory: 2Gi }
+    limits: { memory: 4Gi }
+  # Run on the spot pool created by Terraform
+  nodeSelector:
+    workload: geoflood-batch
+  tolerations:
+    - key: kubernetes.azure.com/scalesetpriority
+      operator: Equal
+      value: spot
+      effect: NoSchedule
+
+# --- Tile service
+titiler:
+  image:
+    repository: ghcr.io/developmentseed/titiler
+    tag: latest           # pin a version for production
+  replicas: 2
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { memory: 1Gi }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  env:
+    WORKERS_PER_CORE: "1"
+    GDAL_CACHEMAX: "200"
+    GDAL_DISABLE_READDIR_ON_OPEN: EMPTY_DIR
+    GDAL_HTTP_MERGE_CONSECUTIVE_RANGES: "YES"
+    GDAL_HTTP_MULTIPLEX: "YES"
+    VSI_CACHE: "TRUE"
+    VSI_CACHE_SIZE: "50000000"
+    TITILER_API_CORS_ORIGINS: "*"
+
+ingress:
+  enabled: true
+  className: nginx
+  host: ""                # e.g. tiles.<ip>.nip.io
+  tls: false
+
+# --- Monitoring (kube-prometheus-stack CRDs + Grafana dashboard sidecar)
+monitoring:
+  prometheusRule:
+    enabled: true
+    labels:
+      release: kube-prometheus-stack
+  dashboard:
+    enabled: true
+  slo:
+    freshnessHours: 26
+    tileLatencySeconds: "0.5"   # must match an nginx histogram bucket
+    # SLO 99% of tiles faster than tileLatencySeconds -> 1% error budget over 30d
+    tileLatencyErrorBudget: 0.01
+    # SLO 99.5% of tile requests non-5xx -> 0.5% error budget over 30d
+    tileAvailabilityErrorBudget: 0.005
